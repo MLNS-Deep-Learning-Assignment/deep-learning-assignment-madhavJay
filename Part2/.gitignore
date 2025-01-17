@@ -1,1 +1,4 @@
 *.npy
+test
+train
+val

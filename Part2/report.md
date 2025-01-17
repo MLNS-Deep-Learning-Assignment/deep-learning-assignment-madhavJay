@@ -1,4 +1,7 @@
-# Enhanced Implementation
+**First Model uses a pretrained ResNet for Feature Extraction and second model has a CNN Feature Extractor that I've trained on a separate dataset** 
+
+# First Model
+## Implementation
 
 - Modified the baseline CNN by replacing it with a ResNet-based architecture for improved feature extraction and generalization in the regression task.
 
@@ -86,5 +89,169 @@ class DigitSumModel(nn.Module):
         features = self.resnet(x)  # Extract features using ResNet
         output = self.mlp(features)  # Compute the sum using MLP
         return output
+```
+
+# Second Model
+
+
+## Overview
+1. **MultiLabelCNN**: A convolutional neural network for multi-label classification of digits.
+2. **SumOfDigitsPredictor**: A regression model that utilizes the feature extraction capabilities of the MultiLabelCNN for predicting the sum of digits.
+
+## Architecture Details
+
+### MultiLabelCNN
+The **MultiLabelCNN** serves as the backbone for feature extraction and digit classification. It is structured as follows:
+
+#### Convolutional Layers
+1. **Conv Layer 1**:
+   - Input Channels: 1
+   - Output Channels: 32
+   - Kernel Size: 5x5
+   - Stride: 1
+   - Padding: 2
+   - Activation: ReLU
+   - Followed by Batch Normalization and MaxPooling (2x2, stride 2).
+
+2. **Conv Layer 2**:
+   - Input Channels: 32
+   - Output Channels: 64
+   - Kernel Size: 3x3
+   - Stride: 1
+   - Padding: 1
+   - Activation: ReLU
+   - Followed by Batch Normalization and MaxPooling (2x2, stride 2).
+
+3. **Conv Layer 3**:
+   - Input Channels: 64
+   - Output Channels: 128
+   - Kernel Size: 3x3
+   - Stride: 1
+   - Padding: 1
+   - Activation: ReLU
+   - Followed by Batch Normalization and MaxPooling (2x2, stride 2).
+
+4. **Conv Layer 4**:
+   - Input Channels: 128
+   - Output Channels: 256
+   - Kernel Size: 3x3
+   - Stride: 1
+   - Padding: 1
+   - Activation: ReLU
+   - Followed by Batch Normalization and MaxPooling (2x2, stride 2).
+
+#### Fully Connected Layers
+1. **FC Layer 1**:
+   - Input Features: 5120 (flattened feature map from convolutional layers).
+   - Output Features: 128
+   - Activation: ReLU
+   - Dropout: 0.5
+
+
+#### Objective
+- The MultiLabelCNN predicts what digits (0-9) are present in the input image.
+
+### SumOfDigitsPredictor
+The **SumOfDigitsPredictor** utilizes the convolutional layers of the **MultiLabelCNN** for feature extraction and adds a regression head to predict the sum of digits.
+
+#### Regression Head
+1. **FC Layer 1**:
+   - Input Features: 5120 (flattened feature map from shared convolutional layers).
+   - Output Features: 128
+   - Activation: ReLU
+   - Dropout: 0.5
+
+2. **Output Layer**:
+   - Input Features: 128
+   - Output Features: 1 (single value for sum of digits).
+
+#### Objective
+- The SumOfDigitsPredictor outputs the sum of all digits present in the input image.
+
+## Training Details
+- **MultiLabelCNN**:
+  - Loss Function: Binary Cross-Entropy (BCE) Loss.
+  - Optimizer: Adam.
+  - Learning Rate: 0.001.
+  - Epochs: 50.
+
+- **SumOfDigitsPredictor**:
+  - Loss Function: Mean Squared Error (MSE) Loss.
+  - Optimizer: Adam.
+  - Learning Rate: 0.001.
+  - Epochs: 50.
+
+## Results
+### MultiLabelCNN
+- **Training Accuracy**: ~75%
+- **Validation Accuracy**: ~48%
+- **Observations**: The model performs well on multi-label classification tasks, leveraging shared features for digit detection.
+
+### SumOfDigitsPredictor
+- **Training MSE**: ~0.9
+- **Validation MSE**: ~1.0
+- **Observations**: The regression head effectively utilizes the shared feature extractor, demonstrating strong performance in predicting the sum of digits.
+
+## Potential Improvements
+1. **Data Augmentation**: Enhance generalization by introducing variations in training data (e.g., rotation, scaling, noise).
+2. **Task-Specific Layers**: Add additional layers tailored to each task to improve task-specific performance.
+3. **Hyperparameter Tuning**: Experiment with learning rates, dropout rates, and optimizers to improve results.
+
+## Code Implementation
+```python
+class MultiLabelCNN(nn.Module):
+    def __init__(self):
+        super(MultiLabelCNN, self).__init__()
+        self.conv_layers = nn.Sequential(
+            nn.Conv2d(1, 32, kernel_size=5, stride=1, padding=2),
+            nn.ReLU(),
+            nn.BatchNorm2d(32),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            
+            nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+            nn.BatchNorm2d(64),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            
+            nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+            nn.BatchNorm2d(128),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            
+            nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+            nn.BatchNorm2d(256),
+            nn.MaxPool2d(kernel_size=2, stride=2)
+        )
+        self.fc_layers = nn.Sequential(
+            nn.Linear(5120, 128),
+            nn.ReLU(),
+            nn.Dropout(0.5),
+            nn.Linear(128, 30),
+            nn.Sigmoid()
+        )
+    
+    def forward(self, x):
+        x = self.conv_layers(x)
+        x = x.view(x.size(0), -1)
+        x = self.fc_layers(x)
+        return x
+
+class SumOfDigitsPredictor(nn.Module):
+    def __init__(self, trained_model):
+        super(SumOfDigitsPredictor, self).__init__()
+        self.conv_layers = trained_model.conv_layers
+        self.sum_head = nn.Sequential(
+            nn.Linear(5120, 128),
+            nn.ReLU(),
+            nn.Dropout(0.5),
+            nn.Linear(128, 1)
+        )
+    
+    def forward(self, x):
+        x = self.conv_layers(x)
+        x = x.view(x.size(0), -1)
+        x = self.sum_head(x)
+        return x
 ```
 
